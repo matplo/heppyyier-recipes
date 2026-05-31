@@ -15,6 +15,7 @@ heppyyier recipe update
 | fastjet | 3.5.1 | Jet finding (FastJet) |
 | fjcontrib | 1.102 | FastJet contrib — SoftDrop, Nsubjettiness, EnergyCorrelator |
 | hepmc3 | 3.3.1 | HepMC3 event record I/O |
+| lhapdf | 6.5.5 | LHAPDF6 PDF sets with Python (SWIG) bindings |
 | lhapdf | 6.5.4 | LHAPDF6 PDF sets with Python (SWIG) bindings |
 | pythia8 | 8.317 | Pythia8 event generator |
 
