@@ -33,7 +33,11 @@ build_script: |
   done
 
   # Build all available processes (or set POWHEG_PROCS to a space-separated list)
-  PROCS="${POWHEG_PROCS:-$(ls User-Processes-V2/ 2>/dev/null | head -20 | tr '\n' ' ')}"
+  if [ -z "$POWHEG_PROCS" ]; then
+    PROCS=$(ls User-Processes-V2/ 2>/dev/null | head -20 | tr '\n' ' ')
+  else
+    PROCS=$POWHEG_PROCS
+  fi
   echo "[powheg] Building processes: $PROCS"
 
   mkdir -p {prefix}/bin
