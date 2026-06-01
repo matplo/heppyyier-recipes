@@ -2,7 +2,7 @@ name: dpmjet
 version: "19.3.7"
 url: "https://github.com/DPMJET/DPMJET/archive/refs/tags/v{version}.tar.gz"
 build_system: script
-verify_binary: dpmjet
+verify_binary: DPMJET
 
 build_script: |
   set -e
@@ -17,9 +17,6 @@ build_script: |
   export FC
   make -j{n_cores} exe
   mkdir -p {prefix}/bin {prefix}/lib
-  # Install the main executable and any companion binaries
-  for f in dpmjet dpmjet-*; do
-    [ -f "$f" ] && [ -x "$f" ] && cp "$f" {prefix}/bin/ && echo "[dpmjet] installed bin/$f"
-  done
-  # Install static libraries if present
-  find . -maxdepth 2 -name "*.a" -exec cp {{}} {prefix}/lib/ \; 2>/dev/null || true
+  # Makefile places binaries in ./bin/ and library in ./lib/
+  cp bin/DPMJET bin/DPMJET_direct bin/pho_aux bin/PHOJET bin/photo_hadronic {prefix}/bin/
+  cp lib/libDPMJET.a {prefix}/lib/
