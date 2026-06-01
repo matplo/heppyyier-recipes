@@ -22,4 +22,4 @@ build_script: |
     [ -f "$f" ] && [ -x "$f" ] && cp "$f" {prefix}/bin/ && echo "[dpmjet] installed bin/$f"
   done
   # Install static libraries if present
-  find . -maxdepth 2 -name "*.a" -exec cp {} {prefix}/lib/ \; 2>/dev/null || true
+  find . -maxdepth 2 -name "*.a" -exec cp {{}} {prefix}/lib/ \; 2>/dev/null || true
