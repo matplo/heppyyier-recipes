@@ -6,7 +6,7 @@ verify_binary: dpmjet
 
 build_script: |
   set -e
-  # Require a Fortran compiler (avoid ${VAR:-default} — format_map consumes {})
+  # Require a Fortran compiler
   if [ -z "$FC" ]; then
     FC=$(command -v gfortran 2>/dev/null || command -v f77 2>/dev/null || echo "")
   fi
