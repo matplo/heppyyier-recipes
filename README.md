@@ -12,6 +12,7 @@ heppyyier recipe update
 
 | Package | Version | Description |
 |---------|---------|-------------|
+| dpmjet | 19.3.7 | DPMJET-III nucleus-nucleus / hadron-nucleus event generator (requires gfortran) |
 | fastjet | 3.5.1 | Jet finding (FastJet) |
 | fjcontrib | 1.102 | FastJet contrib — SoftDrop, Nsubjettiness, EnergyCorrelator |
 | hepmc3 | 3.3.1 | HepMC3 event record I/O |
@@ -19,7 +20,10 @@ heppyyier recipe update
 | jewel | 2.2.0 | JEWEL jet quenching event generator (requires lhapdf) |
 | lhapdf | 6.5.5 | LHAPDF6 PDF sets with Python (SWIG) bindings |
 | lhapdf | 6.5.4 | LHAPDF6 PDF sets with Python (SWIG) bindings |
+| powheg | v2 | POWHEG-BOX-V2 NLO event generator (requires svn; fetches source via SVN) |
 | pythia8 | 8.317 | Pythia8 event generator |
+| sherpa | 2.2.15 | Sherpa 2 multi-purpose event generator (optional: lhapdf, hepmc3, fastjet) |
+| starlight | master | STARlight ultra-peripheral collision generator (optional: hepmc3, dpmjet) |
 
 ## Recipe format
 

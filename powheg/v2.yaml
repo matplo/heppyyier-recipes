@@ -1,0 +1,58 @@
+name: powheg
+version: "v2"
+# No tarball URL — source is fetched via SVN in the build script.
+# Requires: svn (subversion), a C++ compiler with C++11 support.
+build_system: script
+verify_binary: pwhg_main
+
+build_script: |
+  set -e
+  if ! command -v svn >/dev/null 2>&1; then
+    echo "[powheg] ERROR: svn not found — install subversion (brew install subversion)"
+    exit 1
+  fi
+
+  BOX_URL="svn://powhegbox.mib.infn.it/trunk/POWHEG-BOX-V2"
+  PROC_URL="svn://powhegbox.mib.infn.it/trunk/User-Processes-V2"
+
+  echo "[powheg] Checking out POWHEG-BOX-V2 via SVN (this may take a while) ..."
+  svn co --username anonymous --password anonymous "$BOX_URL" powheg-box
+
+  echo "[powheg] Checking out User-Processes-V2 ..."
+  svn co --username anonymous --password anonymous "$PROC_URL" powheg-box/User-Processes-V2 2>/dev/null || true
+
+  cd powheg-box
+
+  # Patch Makefile for C++11 and macOS compatibility
+  for mk in Makefile */Makefile; do
+    [ -f "$mk" ] || continue
+    if [ "$(uname)" = "Darwin" ]; then
+      sed -i.bak 's|-dynamiclib|-dynamiclib -std=c++11|g' "$mk" 2>/dev/null || true
+    fi
+    sed -i.bak 's|CXXFLAGS =|CXXFLAGS = -std=c++11|g' "$mk" 2>/dev/null || true
+  done
+
+  # Build all available processes (or set POWHEG_PROCS to a space-separated list)
+  PROCS="${POWHEG_PROCS:-$(ls User-Processes-V2/ 2>/dev/null | head -20 | tr '\n' ' ')}"
+  echo "[powheg] Building processes: $PROCS"
+
+  mkdir -p {prefix}/bin
+
+  for proc in $PROCS; do
+    proc_dir="User-Processes-V2/$proc"
+    [ -d "$proc_dir" ] || continue
+    echo "[powheg] Building $proc ..."
+    (
+      cp -r "$proc_dir"/* . 2>/dev/null || true
+      make -j{n_cores} pwhg_main 2>/dev/null && \
+        cp pwhg_main {prefix}/bin/pwhg_$proc && \
+        echo "[powheg] installed bin/pwhg_$proc" || \
+        echo "[powheg] WARNING: $proc build failed (skipping)"
+    )
+  done
+
+  # Install the POWHEG box itself (grids, inputs, Born files)
+  rsync -a --exclude="User-Processes-V2" --exclude="*.o" . {prefix}/
+
+  echo "[powheg] Done. Binaries in {prefix}/bin/"
+  echo "[powheg] To build a specific process set: POWHEG_PROCS='hvq Wbb' heyy install powheg --force"
