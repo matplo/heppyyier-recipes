@@ -8,6 +8,8 @@ verify_binary: Sherpa
 build_script: |
   set -e
   opts="--enable-analysis --enable-gzip --enable-pythia --enable-ufo --disable-pyext"
+  # Bundle sqlite3 — macOS ships the dylib but not the headers
+  opts="$opts --with-sqlite3=install"
 
   # MPI causes build failures on macOS
   if [ "$(uname)" = "Darwin" ]; then
