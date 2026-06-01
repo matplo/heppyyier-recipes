@@ -6,8 +6,10 @@ verify_binary: dpmjet
 
 build_script: |
   set -e
-  # Require a Fortran compiler
-  FC="${FC:-$(command -v gfortran 2>/dev/null || command -v f77 2>/dev/null || echo '')}"
+  # Require a Fortran compiler (avoid ${VAR:-default} — format_map consumes {})
+  if [ -z "$FC" ]; then
+    FC=$(command -v gfortran 2>/dev/null || command -v f77 2>/dev/null || echo "")
+  fi
   if [ -z "$FC" ]; then
     echo "[dpmjet] ERROR: no Fortran compiler found — install gfortran (brew install gcc)"
     exit 1
