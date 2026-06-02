@@ -5,6 +5,9 @@ build_system: script
 make_jobs: 4
 verify_binary: root-config
 
+python_paths:
+  - lib
+
 build_script: |
   set -e
   build_dir={srcdir}-build
