@@ -2,26 +2,34 @@ name: cppyy
 version: "3.5.0"
 url: ""
 build_system: script
-make_jobs: 1
+make_jobs: 8
 depends_on:
   - cppyy-cling
 
 build_script: |
   set -e
-  echo "[cppyy] Installing cppyy-backend + cppyy against the source-built cling"
 
-  # Install cppyy-backend (the C++ Python extension that wraps cling).
-  # cppyy-cling must already be installed from source via heyy install cppyy-cling.
-  # This step is fast — it just compiles a small C++ extension against cppyy-cling.
-  pip install cppyy-backend --force-reinstall
+  # Clean up any corrupted partial installations (manifest as ~ppyy-cling warnings)
+  pip uninstall -y cppyy cppyy-backend cppyy-cling CPyCppyy 2>/dev/null || true
 
-  # Install cppyy Python frontend
-  pip install cppyy=={version} --force-reinstall
+  # Build cppyy-cling from source if not already done by the cppyy-cling recipe.
+  # The sdist bundles the full LLVM + patched cling source tree (~13k files).
+  # STDCXX=17 and MAKE_NPROCS are read by the cppyy-cling setup.py.
+  echo "[cppyy] Step 1/2: Building LLVM + cling from source (30-90 min)"
+  echo "[cppyy] Compiler: $(c++ --version | head -1)"
+  STDCXX=17 MAKE_NPROCS={n_cores} pip install cppyy-cling==6.32.8 \
+      --no-binary cppyy-cling \
+      --force-reinstall \
+      --no-build-isolation \
+      --verbose
+
+  echo "[cppyy] Step 2/2: Installing cppyy-backend + cppyy"
+  pip install cppyy-backend==1.15.3 --force-reinstall
+  pip install cppyy=={version} --no-deps --force-reinstall
 
   # Verify
-  python3 -c "import cppyy, cppyy_backend, pathlib; lib=pathlib.Path(cppyy_backend.__file__).parent/'lib'/'libCling.so'; print('[cppyy]', cppyy.__version__, 'libCling.so exists:', lib.exists())"
+  python3 -c "import cppyy, cppyy_backend, pathlib; lib=pathlib.Path(cppyy_backend.__file__).parent/'lib'/'libCling.so'; print('[cppyy]', cppyy.__version__, '- libCling.so exists:', lib.exists())"
 
-  # Write marker for heppyyier registry
   mkdir -p {prefix}
   echo "{version}" > {prefix}/.cppyy_install
-  echo "[cppyy] Done. Run: python3 -c 'import cppyy; print(cppyy.__version__)'"
+  echo "[cppyy] Done. Test with: python3 -c 'import cppyy; print(cppyy.__version__)'"
