@@ -1,0 +1,12 @@
+name: swig
+version: "4.1.1"
+url: "https://prdownloads.sourceforge.net/swig/swig-{version}.tar.gz"
+build_system: script
+make_jobs: 4
+verify_binary: swig
+
+build_script: |
+  set -e
+  ./configure --prefix={prefix} --without-alllang --with-python
+  make -j{n_cores}
+  make install
