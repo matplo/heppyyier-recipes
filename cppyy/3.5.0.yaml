@@ -1,0 +1,34 @@
+name: cppyy
+version: "3.5.0"
+url: ""
+build_system: script
+make_jobs: 1
+depends_on:
+  - cppyy-cling
+
+build_script: |
+  set -e
+  echo "[cppyy] Installing cppyy-backend + cppyy against the source-built cling"
+
+  # Install cppyy-backend (the C++ Python extension that wraps cling).
+  # cppyy-cling must already be installed (from source, via heyy install cppyy-cling).
+  # This step is fast — it just builds a small C++ extension against cppyy-cling.
+  pip install cppyy-backend --force-reinstall
+
+  # Install cppyy Python frontend
+  pip install cppyy=={version} --force-reinstall
+
+  # Verify
+  python3 -c "
+import cppyy, cppyy_backend, pathlib
+print(f'[cppyy] version: {cppyy.__version__}')
+print(f'[cppyy] cppyy at: {cppyy.__file__}')
+print(f'[cppyy] cppyy_backend at: {cppyy_backend.__file__}')
+lib = pathlib.Path(cppyy_backend.__file__).parent / 'lib' / 'libCling.so'
+print(f'[cppyy] libCling.so: {lib} (exists={lib.exists()})')
+"
+
+  # Write marker for heppyyier registry
+  mkdir -p {prefix}
+  echo "{version}" > {prefix}/.cppyy_install
+  echo "[cppyy] Done. Run: python3 -c \"import cppyy; print(cppyy.__version__)\""
