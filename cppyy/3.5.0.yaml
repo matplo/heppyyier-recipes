@@ -3,8 +3,6 @@ version: "3.5.0"
 url: ""
 build_system: script
 make_jobs: 8
-depends_on:
-  - cppyy-cling
 
 build_script: |
   set -e
@@ -16,23 +14,27 @@ build_script: |
   # an old system GCC while 'g++' is the newer version.
   export CXX=g++ CC=gcc
 
-  # Clean up any corrupted partial installations (manifest as ~ppyy-cling warnings)
+  # Clean up any existing installations (including corrupted partial ones)
   pip uninstall -y cppyy cppyy-backend cppyy-cling CPyCppyy 2>/dev/null || true
 
-  # Build cppyy-cling from source if not already done by the cppyy-cling recipe.
-  # The sdist bundles the full LLVM + patched cling source tree (~13k files).
-  # STDCXX=17 and MAKE_NPROCS are read by the cppyy-cling setup.py.
-  echo "[cppyy] Step 1/2: Building LLVM + cling from source (30-90 min)"
+  # Install the full cppyy stack in ONE pip command, forcing cppyy-cling
+  # to be built from source. Using a single command avoids the problem
+  # where a later step (pip install cppyy-backend) re-downloads and
+  # overwrites the source-built cppyy-cling with the binary manylinux wheel.
+  #
+  # --no-binary cppyy-cling : force source build of LLVM + cling (~30-90 min)
+  # --no-cache-dir          : ignore cached wheels (a cached .whl may be the
+  #                           binary wheel from a previous download)
+  # STDCXX=17               : build with C++17 (required by cppyy-cling setup.py)
+  # MAKE_NPROCS             : parallelism for the cmake/make build inside cppyy-cling
+  echo "[cppyy] Building LLVM + cling from source (30-90 min)"
   echo "[cppyy] Compiler: $(g++ --version | head -1)"
   STDCXX=17 MAKE_NPROCS={n_cores} CXX=g++ CC=gcc \
-  pip install cppyy-cling==6.32.8 \
+  pip install cppyy=={version} \
       --no-binary cppyy-cling \
+      --no-cache-dir \
       --force-reinstall \
       --verbose
-
-  echo "[cppyy] Step 2/2: Installing cppyy-backend + cppyy"
-  pip install cppyy-backend==1.15.3 --force-reinstall
-  pip install cppyy=={version} --no-deps --force-reinstall
 
   # Verify
   python3 -c "import cppyy, cppyy_backend, pathlib; lib=pathlib.Path(cppyy_backend.__file__).parent/'lib'/'libCling.so'; print('[cppyy]', cppyy.__version__, '- libCling.so exists:', lib.exists())"
