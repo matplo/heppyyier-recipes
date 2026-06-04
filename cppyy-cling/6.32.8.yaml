@@ -10,39 +10,24 @@ build_script: |
   echo "[cppyy-cling] The sdist bundles the full LLVM + cling source tree (~13k files)."
   echo "[cppyy-cling] Expect 30-90 min and up to 10 GB temporary disk space."
 
-  # Uninstall the pre-built binary wheel — it ships a cling that was compiled
-  # against a specific Linux environment and is incompatible with GCC 14+ headers.
+  # Uninstall the pre-built binary wheel — it ships a cling compiled against a
+  # specific Linux environment and is incompatible with GCC 14+ headers.
   pip uninstall -y cppyy cppyy-backend cppyy-cling 2>/dev/null || true
 
   # Build cppyy-cling from source. The sdist contains the full LLVM + patched
   # cling source. pip triggers a cmake build using the system compiler.
   # STDCXX=17: use C++17 (required; 20 is the default on non-manylinux)
   # MAKE_NPROCS: parallelism for the cmake build
-  STDCXX=17 \
-  MAKE_NPROCS={n_cores} \
-  pip install cppyy-cling=={version} \
+  STDCXX=17 MAKE_NPROCS={n_cores} pip install cppyy-cling=={version} \
       --no-binary cppyy-cling \
       --force-reinstall \
       --no-build-isolation \
       --verbose
 
-  # Verify the build produced a working cling
-  python3 -c "
-import cppyy_backend, pathlib
-lib = pathlib.Path(cppyy_backend.__file__).parent / 'lib'
-cling = lib / 'libCling.so'
-print(f'[cppyy-cling] cppyy_backend at: {cppyy_backend.__file__}')
-print(f'[cppyy-cling] libCling.so exists: {cling.exists()}')
-if not cling.exists():
-    raise RuntimeError('libCling.so not found — build may have failed')
-"
+  # Verify
+  python3 -c "import cppyy_backend, pathlib; lib=pathlib.Path(cppyy_backend.__file__).parent/'lib'; cling=lib/'libCling.so'; print('[cppyy-cling] backend:', cppyy_backend.__file__); print('[cppyy-cling] libCling.so exists:', cling.exists()); assert cling.exists(), 'libCling.so not found'"
 
   # Write installation info to the heppyyier prefix for registry tracking
   mkdir -p {prefix}
-  python3 -c "
-import cppyy_backend, pathlib, sys
-info = pathlib.Path('{prefix}') / '.cling_install'
-info.write_text(str(pathlib.Path(cppyy_backend.__file__).parent))
-print(f'[cppyy-cling] recorded at: {info}')
-"
-  echo "[cppyy-cling] Build complete. Native cling installed into $(python3 -c 'import cppyy_backend; import os; print(os.path.dirname(cppyy_backend.__file__))')"
+  python3 -c "import cppyy_backend, pathlib; pathlib.Path('{prefix}/.cling_install').write_text(str(pathlib.Path(cppyy_backend.__file__).parent))"
+  echo "[cppyy-cling] Build complete."
