@@ -9,6 +9,13 @@ depends_on:
 build_script: |
   set -e
 
+  # Ensure setuptools is available for the pip source build backend
+  pip install setuptools wheel --quiet
+
+  # Use g++ explicitly — on SUSE/RHEL the default 'c++' may point to
+  # an old system GCC while 'g++' is the newer version.
+  export CXX=g++ CC=gcc
+
   # Clean up any corrupted partial installations (manifest as ~ppyy-cling warnings)
   pip uninstall -y cppyy cppyy-backend cppyy-cling CPyCppyy 2>/dev/null || true
 
@@ -16,11 +23,11 @@ build_script: |
   # The sdist bundles the full LLVM + patched cling source tree (~13k files).
   # STDCXX=17 and MAKE_NPROCS are read by the cppyy-cling setup.py.
   echo "[cppyy] Step 1/2: Building LLVM + cling from source (30-90 min)"
-  echo "[cppyy] Compiler: $(c++ --version | head -1)"
-  STDCXX=17 MAKE_NPROCS={n_cores} pip install cppyy-cling==6.32.8 \
+  echo "[cppyy] Compiler: $(g++ --version | head -1)"
+  STDCXX=17 MAKE_NPROCS={n_cores} CXX=g++ CC=gcc \
+  pip install cppyy-cling==6.32.8 \
       --no-binary cppyy-cling \
       --force-reinstall \
-      --no-build-isolation \
       --verbose
 
   echo "[cppyy] Step 2/2: Installing cppyy-backend + cppyy"

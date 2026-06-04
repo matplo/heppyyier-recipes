@@ -6,7 +6,14 @@ make_jobs: 8
 
 build_script: |
   set -e
-  echo "[cppyy-cling] Building LLVM + cling from source with $(c++ --version | head -1)"
+
+  # Ensure setuptools is available for the pip source build backend
+  pip install setuptools wheel --quiet
+
+  # Use g++ explicitly — on SUSE/RHEL the default 'c++' may point to
+  # an old system GCC (e.g. 7.5.0) while 'g++' is a newer GCC 13+.
+  export CXX=g++ CC=gcc
+  echo "[cppyy-cling] Building LLVM + cling from source with $(g++ --version | head -1)"
   echo "[cppyy-cling] The sdist bundles the full LLVM + cling source tree (~13k files)."
   echo "[cppyy-cling] Expect 30-90 min and up to 10 GB temporary disk space."
 
@@ -18,10 +25,11 @@ build_script: |
   # cling source. pip triggers a cmake build using the system compiler.
   # STDCXX=17: use C++17 (required; 20 is the default on non-manylinux)
   # MAKE_NPROCS: parallelism for the cmake build
-  STDCXX=17 MAKE_NPROCS={n_cores} pip install cppyy-cling=={version} \
+  # CXX/CC: override to ensure we use the newer g++ not the system default c++
+  STDCXX=17 MAKE_NPROCS={n_cores} CXX=g++ CC=gcc \
+  pip install cppyy-cling=={version} \
       --no-binary cppyy-cling \
       --force-reinstall \
-      --no-build-isolation \
       --verbose
 
   # Verify
