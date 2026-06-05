@@ -3,6 +3,7 @@ version: "3.5.0"
 url: ""
 build_system: script
 make_jobs: 8
+python_paths: ["."]
 
 build_script: |
   set -e
@@ -11,20 +12,20 @@ build_script: |
   pip install setuptools wheel --quiet
 
   # Use g++ explicitly — on SUSE/RHEL the default 'c++' may point to
-  # an old system GCC while 'g++' is the newer version.
+  # an old system GCC (e.g. 7.5.0) while 'g++' is a newer GCC 13+.
   export CXX=g++ CC=gcc
 
   # Clean up any existing installations (including corrupted partial ones)
   pip uninstall -y cppyy cppyy-backend cppyy-cling CPyCppyy 2>/dev/null || true
 
-  # Install the full cppyy stack in ONE pip command, forcing cppyy-cling
-  # to be built from source. Using a single command avoids the problem
-  # where a later step (pip install cppyy-backend) re-downloads and
-  # overwrites the source-built cppyy-cling with the binary manylinux wheel.
+  # Install the full cppyy stack in ONE pip command to {prefix}, forcing
+  # cppyy-cling to be built from source.
   #
+  # --target {prefix}       : install to heppyyier-managed prefix (shareable
+  #                           via HEPPYYIER_PACKAGES_DIR / HEPPYYIER_SYSTEM_PACKAGES_DIR)
   # --no-binary cppyy-cling : force source build of LLVM + cling (~30-90 min)
-  # --no-cache-dir          : ignore cached wheels (a cached .whl may be the
-  #                           binary wheel from a previous download)
+  # --no-cache-dir          : ignore cached wheels (avoids reusing a binary wheel
+  #                           downloaded in a previous attempt)
   # STDCXX=17               : build with C++17 (required by cppyy-cling setup.py)
   # MAKE_NPROCS             : parallelism for the cmake/make build inside cppyy-cling
   echo "[cppyy] Building LLVM + cling from source (30-90 min)"
@@ -34,11 +35,11 @@ build_script: |
       --no-binary cppyy-cling \
       --no-cache-dir \
       --force-reinstall \
+      --target {prefix} \
       --verbose
 
-  # Verify
-  python3 -c "import cppyy, cppyy_backend, pathlib; lib=pathlib.Path(cppyy_backend.__file__).parent/'lib'/'libCling.so'; print('[cppyy]', cppyy.__version__, '- libCling.so exists:', lib.exists())"
+  # Verify — PYTHONPATH must include {prefix} since packages are not in site-packages
+  PYTHONPATH={prefix} python3 -c "import cppyy, cppyy_backend, pathlib; lib=pathlib.Path(cppyy_backend.__file__).parent/'lib'/'libCling.so'; print('[cppyy]', cppyy.__version__, '- libCling.so exists:', lib.exists())"
 
-  mkdir -p {prefix}
   echo "{version}" > {prefix}/.cppyy_install
-  echo "[cppyy] Done. Test with: python3 -c 'import cppyy; print(cppyy.__version__)'"
+  echo "[cppyy] Done. Test with: PYTHONPATH={prefix} python3 -c 'import cppyy; print(cppyy.__version__)'"
