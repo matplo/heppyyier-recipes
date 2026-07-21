@@ -1,6 +1,6 @@
 name: pythia8
 version: "8.317"
-url: "https://pythia.org/download/pythia83/pythia{version_nodot}.tgz"
+url: "https://pythia.org/releases/pythia83/pythia{version_nodot}.tgz"
 build_system: script
 make_jobs: 4
 verify_binary: pythia8-config
