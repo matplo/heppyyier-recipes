@@ -8,53 +8,74 @@ python_paths: ["."]
 build_script: |
   set -e
 
-  # cmake 4.x breaks cppyy-cling 6.32.8's CMakeLists.txt:189.
-  # pip creates nested isolated build environments that download cmake 4.x even
-  # when PIP_CONSTRAINT is set — pip 26.x does not propagate constraint files
-  # into these nested envs for build-system requirements.
-  #
-  # Fix: two-step build.
-  #   Step 1 — `pip wheel --no-build-isolation`: build cppyy-cling as a wheel
-  #     file using the VENV's cmake (3.x, installed here) instead of letting
-  #     pip create an isolated env that downloads cmake 4.x.
-  #   Step 2 — `pip install --find-links`: install cppyy pointing at the
-  #     pre-built wheel. No cmake is invoked at install time.
-  pip install setuptools wheel "cmake<4.0.0" --quiet
-
-  # On Linux: use g++/gcc (SUSE/RHEL system 'c++' may be old GCC).
-  # On macOS: leave CC/CXX unset — Apple clang is the right compiler.
-  if [[ "$(uname)" != "Darwin" ]]; then
-    export CXX=g++ CC=gcc
-  fi
-  echo "[cppyy] Compiler: $(${{CXX:-c++}} --version | head -1)"
-  echo "[cppyy] cmake:    $(cmake --version | head -1)"
-
   pip uninstall -y cppyy cppyy-backend cppyy-cling CPyCppyy 2>/dev/null || true
 
-  # Step 1: Build cppyy-cling as a local wheel using the venv's cmake.
-  # --no-build-isolation: skip isolated build env → uses the venv's cmake<4
-  # --no-deps: only wheel cppyy-cling itself, not its runtime deps
-  echo "[cppyy] Building cppyy-cling wheel from source (~30-90 min)..."
-  mkdir -p {builddir}/cppyy-wheels
-  STDCXX=17 MAKE_NPROCS={n_cores} \
-  pip wheel "cppyy-cling==6.32.8" \
-      --no-binary cppyy-cling \
-      --no-build-isolation \
-      --no-cache-dir \
-      --no-deps \
-      -w {builddir}/cppyy-wheels \
-      --verbose
+  if [[ "$(uname)" == "Darwin" ]]; then
+    # ------------------------------------------------------------------ macOS
+    # cppyy-cling 6.32.8 cannot be built from source on macOS with Xcode 16+:
+    #   1. cmake 4.x (pip build dep) breaks CMakeLists.txt:189
+    #   2. Bundled zlib's zutil.h fdopen macro conflicts with macOS 26.x SDK _stdio.h
+    # Use the pre-built binary wheels instead.
+    echo "[cppyy] macOS: installing pre-built binary wheels..."
+    pip install "cppyy=={version}" \
+        --no-cache-dir \
+        --force-reinstall \
+        --target {prefix}
 
-  # Step 2: Install the full cppyy stack.
-  # --find-links supplies the pre-built cppyy-cling wheel; pip uses it instead
-  # of building from source — no cmake is invoked in this step.
-  echo "[cppyy] Installing cppyy stack..."
-  pip install "cppyy=={version}" \
-      --find-links {builddir}/cppyy-wheels \
-      --no-cache-dir \
-      --force-reinstall \
-      --target {prefix} \
-      --verbose
+    # cling 16 (in the binary wheel) cannot parse new macOS SDK headers and so
+    # cannot build the PCH (allDict.cxx.pch) on first import.
+    # Copy a pre-built PCH from an existing working installation if available.
+    PCH_DEST="{prefix}/cppyy_backend/etc"
+    if ! ls "$PCH_DEST"/allDict.cxx.pch.* 2>/dev/null | grep -q .; then
+      PCH_SRC=$(find "$HOME" \
+          -path "*/cppyy_backend/etc/allDict.cxx.pch.*" \
+          -not -path "{prefix}/*" \
+          2>/dev/null | head -1)
+      if [ -n "$PCH_SRC" ]; then
+        cp "$PCH_SRC" "$PCH_DEST/"
+        echo "[cppyy] Copied pre-built PCH: $(basename $PCH_SRC)"
+        echo "[cppyy] Source: $PCH_SRC"
+      else
+        echo "[cppyy] WARNING: No pre-built PCH found in \$HOME."
+        echo "[cppyy] 'import cppyy' will fail until you supply one:"
+        echo "[cppyy]   cp <working-env>/lib/python*/site-packages/cppyy_backend/etc/allDict.cxx.pch.* \\"
+        echo "[cppyy]      $PCH_DEST/"
+      fi
+    else
+      echo "[cppyy] PCH already present."
+    fi
+
+  else
+    # ------------------------------------------------------------------ Linux
+    # Two-step source build to work around pip 26.x not propagating
+    # PIP_CONSTRAINT into nested isolated build environments.
+    # Step 1: pip wheel --no-build-isolation uses the venv's cmake<4 directly.
+    # Step 2: pip install --find-links installs from the pre-built wheel.
+    pip install setuptools wheel "cmake<4.0.0" --quiet
+
+    if command -v g++ &>/dev/null; then
+      export CXX=g++ CC=gcc
+    fi
+    echo "[cppyy] Compiler: $(${{CXX:-c++}} --version | head -1)"
+    echo "[cppyy] cmake:    $(cmake --version | head -1)"
+
+    echo "[cppyy] Building cppyy-cling wheel from source (~30-90 min)..."
+    mkdir -p {builddir}/cppyy-wheels
+    STDCXX=17 MAKE_NPROCS={n_cores} \
+    pip wheel "cppyy-cling==6.32.8" \
+        --no-binary cppyy-cling \
+        --no-build-isolation \
+        --no-cache-dir \
+        --no-deps \
+        -w {builddir}/cppyy-wheels
+
+    echo "[cppyy] Installing cppyy stack..."
+    pip install "cppyy=={version}" \
+        --find-links {builddir}/cppyy-wheels \
+        --no-cache-dir \
+        --force-reinstall \
+        --target {prefix}
+  fi
 
   # Verify — PYTHONPATH must include {prefix} since packages land there, not in site-packages.
   # libCling is a .dylib on macOS and a .so on Linux.
