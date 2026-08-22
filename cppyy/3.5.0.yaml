@@ -12,8 +12,16 @@ build_script: |
   pip install setuptools wheel --quiet
 
   # cmake 4.x changed if() parsing in a way that breaks cppyy-cling 6.32.8's
-  # CMakeLists.txt:189. pip pulls in cmake 4.x as a build dep unless pinned.
-  # Install a compatible cmake before the cppyy-cling source build.
+  # CMakeLists.txt:189. pip downloads cmake as a build dep for cppyy-cling in
+  # a nested isolated environment, so a plain `pip install cmake<4` in the
+  # outer venv is not enough. PIP_CONSTRAINT is inherited by all subprocess
+  # pip invocations (including nested build-env installs), so it's the only
+  # reliable way to pin cmake across the whole dependency chain.
+  _cmake_constraint="{builddir}/cmake_constraint.txt"
+  echo "cmake<4.0.0" > "$_cmake_constraint"
+  export PIP_CONSTRAINT="$_cmake_constraint"
+  # Also install a compatible cmake into the outer venv so `cmake --version`
+  # below reports the right version and any direct cmake invocation is pinned.
   pip install "cmake<4.0.0" --quiet
 
   # On Linux, prefer g++/gcc explicitly — on SUSE/RHEL the default 'c++' may
@@ -41,7 +49,7 @@ build_script: |
   # STDCXX=17               : build with C++17 (required by cppyy-cling setup.py)
   # MAKE_NPROCS             : parallelism for the cmake/make build inside cppyy-cling
   echo "[cppyy] Building LLVM + cling from source (30-90 min)"
-  echo "[cppyy] Compiler: ${_compiler_msg}"
+  echo "[cppyy] Compiler: $_compiler_msg"
   echo "[cppyy] cmake: $(cmake --version | head -1)"
   STDCXX=17 MAKE_NPROCS={n_cores} \
   pip install cppyy=={version} \
