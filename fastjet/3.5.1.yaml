@@ -1,6 +1,6 @@
 name: fastjet
 version: "3.5.1"
-url: "http://fastjet.fr/repo/fastjet-{version}.tar.gz"
+url: "https://gitlab.com/fastjet/fastjet/-/archive/fastjet-{version}/fastjet-fastjet-{version}.tar.gz"
 build_system: autotools
 configure_args:
   - "--enable-shared"
