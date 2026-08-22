@@ -1,13 +1,29 @@
 name: fastjet
 version: "3.5.1"
-url: "https://gitlab.com/fastjet/fastjet/-/archive/fastjet-{version}/fastjet-fastjet-{version}.tar.gz"
-build_system: autotools
+build_system: script
 configure_args:
   - "--enable-shared"
   - "--disable-static"
   - "--enable-allplugins"
 make_jobs: 4
 verify_binary: fastjet-config
+
+# No tarball URL: GitLab's `-/archive` tarballs do not include the
+# content of git submodules (plugins/SISCone/siscone ends up empty),
+# which breaks the build with --enable-allplugins. Clone with
+# --recurse-submodules instead. The git checkout also has no
+# generated `configure` (unlike the old fastjet.fr release tarball),
+# so bootstrap it with autogen.sh first.
+build_script: |
+  set -e
+  rm -rf fastjet-{version}
+  git clone --depth 1 --branch fastjet-{version} --recurse-submodules \
+    https://gitlab.com/fastjet/fastjet.git fastjet-{version}
+  cd fastjet-{version}
+  NOCONFIGURE=1 ./autogen.sh
+  ./configure --prefix={prefix} {configure_args}
+  make -j{n_cores}
+  make install
 
 cppyy:
   namespace: fastjet
@@ -20,8 +36,3 @@ cppyy:
     - fastjet/tools/GridMedianBackgroundEstimator.hh
   libraries:
     - fastjet
-
-# Optional: override with a custom build script.
-# Available template variables: {prefix} {version} {srcdir} {builddir} {n_cores} {configure_args}
-# build_script: |
-#   ./configure --prefix={prefix} {configure_args} && make -j{n_cores} && make install
