@@ -26,7 +26,7 @@ build_script: |
   if [[ "$(uname)" != "Darwin" ]]; then
     export CXX=g++ CC=gcc
   fi
-  echo "[cppyy] Compiler: $(${CXX:-c++} --version | head -1)"
+  echo "[cppyy] Compiler: $(${{CXX:-c++}} --version | head -1)"
   echo "[cppyy] cmake:    $(cmake --version | head -1)"
 
   pip uninstall -y cppyy cppyy-backend cppyy-cling CPyCppyy 2>/dev/null || true
