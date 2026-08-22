@@ -1,6 +1,6 @@
 name: fjcontrib
 version: "1.102"
-url: "https://fastjet.hepforge.org/contrib/downloads/fjcontrib-{version}.tar.gz"
+url: "https://github.com/fjcontrib/fjcontrib/archive/refs/tags/{version}.tar.gz"
 build_system: script
 depends_on:
   - fastjet
@@ -8,6 +8,15 @@ make_jobs: 4
 
 build_script: |
   set -e
+  # The GitHub tag archive only contains the fjcontrib scaffolding —
+  # the individual contribs (SoftDrop, Nsubjettiness, ...) are pulled
+  # in separately from the hepforge SVN repo. Requires svn (subversion).
+  if ! command -v svn >/dev/null 2>&1; then
+    echo "[fjcontrib] ERROR: svn not found — install subversion (brew install subversion)"
+    exit 1
+  fi
+  chmod +x scripts/update-contribs.sh scripts/internal/*.sh
+  ./scripts/update-contribs.sh
   fjconfig={fastjet_prefix}/bin/fastjet-config
   if [ ! -x "$fjconfig" ]; then
     echo "[fjcontrib] ERROR: fastjet-config not found at $fjconfig"
