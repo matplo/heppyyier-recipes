@@ -11,9 +11,21 @@ build_script: |
   # Ensure setuptools is available for the pip source build backend
   pip install setuptools wheel --quiet
 
-  # Use g++ explicitly — on SUSE/RHEL the default 'c++' may point to
-  # an old system GCC (e.g. 7.5.0) while 'g++' is a newer GCC 13+.
-  export CXX=g++ CC=gcc
+  # cmake 4.x changed if() parsing in a way that breaks cppyy-cling 6.32.8's
+  # CMakeLists.txt:189. pip pulls in cmake 4.x as a build dep unless pinned.
+  # Install a compatible cmake before the cppyy-cling source build.
+  pip install "cmake<4.0.0" --quiet
+
+  # On Linux, prefer g++/gcc explicitly — on SUSE/RHEL the default 'c++' may
+  # point to an old system GCC (e.g. 7.5.0) while 'g++' is a newer GCC 13+.
+  # On macOS, leave CC/CXX unset so Apple clang is used (g++ is not available
+  # by default and forcing it breaks the build).
+  if [[ "$(uname)" != "Darwin" ]]; then
+    export CXX=g++ CC=gcc
+    _compiler_msg="$(g++ --version | head -1)"
+  else
+    _compiler_msg="$(c++ --version | head -1)"
+  fi
 
   # Clean up any existing installations (including corrupted partial ones)
   pip uninstall -y cppyy cppyy-backend cppyy-cling CPyCppyy 2>/dev/null || true
@@ -29,8 +41,9 @@ build_script: |
   # STDCXX=17               : build with C++17 (required by cppyy-cling setup.py)
   # MAKE_NPROCS             : parallelism for the cmake/make build inside cppyy-cling
   echo "[cppyy] Building LLVM + cling from source (30-90 min)"
-  echo "[cppyy] Compiler: $(g++ --version | head -1)"
-  STDCXX=17 MAKE_NPROCS={n_cores} CXX=g++ CC=gcc \
+  echo "[cppyy] Compiler: ${_compiler_msg}"
+  echo "[cppyy] cmake: $(cmake --version | head -1)"
+  STDCXX=17 MAKE_NPROCS={n_cores} \
   pip install cppyy=={version} \
       --no-binary cppyy-cling \
       --no-cache-dir \
@@ -38,8 +51,16 @@ build_script: |
       --target {prefix} \
       --verbose
 
-  # Verify — PYTHONPATH must include {prefix} since packages are not in site-packages
-  PYTHONPATH={prefix} python3 -c "import cppyy, cppyy_backend, pathlib; lib=pathlib.Path(cppyy_backend.__file__).parent/'lib'/'libCling.so'; print('[cppyy]', cppyy.__version__, '- libCling.so exists:', lib.exists())"
+  # Verify — PYTHONPATH must include {prefix} since packages are not in site-packages.
+  # libCling is a .dylib on macOS and a .so on Linux.
+  PYTHONPATH={prefix} python3 -c "
+  import cppyy, cppyy_backend, pathlib, sys
+  base = pathlib.Path(cppyy_backend.__file__).parent / 'lib'
+  lib = next((base / n for n in ('libCling.dylib', 'libCling.so') if (base / n).exists()), None)
+  print('[cppyy]', cppyy.__version__, '- libCling:', lib.name if lib else 'NOT FOUND')
+  if lib is None:
+      sys.exit(1)
+  "
 
   echo "{version}" > {prefix}/.cppyy_install
   echo "[cppyy] Done. Test with: PYTHONPATH={prefix} python3 -c 'import cppyy; print(cppyy.__version__)'"
