@@ -8,58 +8,55 @@ python_paths: ["."]
 build_script: |
   set -e
 
-  # Ensure setuptools is available for the pip source build backend
-  pip install setuptools wheel --quiet
+  # cmake 4.x breaks cppyy-cling 6.32.8's CMakeLists.txt:189.
+  # pip creates nested isolated build environments that download cmake 4.x even
+  # when PIP_CONSTRAINT is set — pip 26.x does not propagate constraint files
+  # into these nested envs for build-system requirements.
+  #
+  # Fix: two-step build.
+  #   Step 1 — `pip wheel --no-build-isolation`: build cppyy-cling as a wheel
+  #     file using the VENV's cmake (3.x, installed here) instead of letting
+  #     pip create an isolated env that downloads cmake 4.x.
+  #   Step 2 — `pip install --find-links`: install cppyy pointing at the
+  #     pre-built wheel. No cmake is invoked at install time.
+  pip install setuptools wheel "cmake<4.0.0" --quiet
 
-  # cmake 4.x changed if() parsing in a way that breaks cppyy-cling 6.32.8's
-  # CMakeLists.txt:189. pip downloads cmake as a build dep for cppyy-cling in
-  # a nested isolated environment, so a plain `pip install cmake<4` in the
-  # outer venv is not enough. PIP_CONSTRAINT is inherited by all subprocess
-  # pip invocations (including nested build-env installs), so it's the only
-  # reliable way to pin cmake across the whole dependency chain.
-  _cmake_constraint="{builddir}/cmake_constraint.txt"
-  echo "cmake<4.0.0" > "$_cmake_constraint"
-  export PIP_CONSTRAINT="$_cmake_constraint"
-  # Also install a compatible cmake into the outer venv so `cmake --version`
-  # below reports the right version and any direct cmake invocation is pinned.
-  pip install "cmake<4.0.0" --quiet
-
-  # On Linux, prefer g++/gcc explicitly — on SUSE/RHEL the default 'c++' may
-  # point to an old system GCC (e.g. 7.5.0) while 'g++' is a newer GCC 13+.
-  # On macOS, leave CC/CXX unset so Apple clang is used (g++ is not available
-  # by default and forcing it breaks the build).
+  # On Linux: use g++/gcc (SUSE/RHEL system 'c++' may be old GCC).
+  # On macOS: leave CC/CXX unset — Apple clang is the right compiler.
   if [[ "$(uname)" != "Darwin" ]]; then
     export CXX=g++ CC=gcc
-    _compiler_msg="$(g++ --version | head -1)"
-  else
-    _compiler_msg="$(c++ --version | head -1)"
   fi
+  echo "[cppyy] Compiler: $(${CXX:-c++} --version | head -1)"
+  echo "[cppyy] cmake:    $(cmake --version | head -1)"
 
-  # Clean up any existing installations (including corrupted partial ones)
   pip uninstall -y cppyy cppyy-backend cppyy-cling CPyCppyy 2>/dev/null || true
 
-  # Install the full cppyy stack in ONE pip command to {prefix}, forcing
-  # cppyy-cling to be built from source.
-  #
-  # --target {prefix}       : install to heppyyier-managed prefix (shareable
-  #                           via HEPPYYIER_PACKAGES_DIR / HEPPYYIER_SYSTEM_PACKAGES_DIR)
-  # --no-binary cppyy-cling : force source build of LLVM + cling (~30-90 min)
-  # --no-cache-dir          : ignore cached wheels (avoids reusing a binary wheel
-  #                           downloaded in a previous attempt)
-  # STDCXX=17               : build with C++17 (required by cppyy-cling setup.py)
-  # MAKE_NPROCS             : parallelism for the cmake/make build inside cppyy-cling
-  echo "[cppyy] Building LLVM + cling from source (30-90 min)"
-  echo "[cppyy] Compiler: $_compiler_msg"
-  echo "[cppyy] cmake: $(cmake --version | head -1)"
+  # Step 1: Build cppyy-cling as a local wheel using the venv's cmake.
+  # --no-build-isolation: skip isolated build env → uses the venv's cmake<4
+  # --no-deps: only wheel cppyy-cling itself, not its runtime deps
+  echo "[cppyy] Building cppyy-cling wheel from source (~30-90 min)..."
+  mkdir -p {builddir}/cppyy-wheels
   STDCXX=17 MAKE_NPROCS={n_cores} \
-  pip install cppyy=={version} \
+  pip wheel "cppyy-cling==6.32.8" \
       --no-binary cppyy-cling \
+      --no-build-isolation \
+      --no-cache-dir \
+      --no-deps \
+      -w {builddir}/cppyy-wheels \
+      --verbose
+
+  # Step 2: Install the full cppyy stack.
+  # --find-links supplies the pre-built cppyy-cling wheel; pip uses it instead
+  # of building from source — no cmake is invoked in this step.
+  echo "[cppyy] Installing cppyy stack..."
+  pip install "cppyy=={version}" \
+      --find-links {builddir}/cppyy-wheels \
       --no-cache-dir \
       --force-reinstall \
       --target {prefix} \
       --verbose
 
-  # Verify — PYTHONPATH must include {prefix} since packages are not in site-packages.
+  # Verify — PYTHONPATH must include {prefix} since packages land there, not in site-packages.
   # libCling is a .dylib on macOS and a .so on Linux.
   PYTHONPATH={prefix} python3 -c "
   import cppyy, cppyy_backend, pathlib, sys
