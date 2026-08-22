@@ -12,37 +12,73 @@ build_script: |
 
   if [[ "$(uname)" == "Darwin" ]]; then
     # ------------------------------------------------------------------ macOS
-    # cppyy-cling 6.32.8 cannot be built from source on macOS with Xcode 16+:
+    # cppyy-cling 6.32.8 (LLVM/cling 16) cannot be built from source on macOS
+    # with Xcode 16+ SDK (macOS 26.x) due to:
     #   1. cmake 4.x (pip build dep) breaks CMakeLists.txt:189
-    #   2. Bundled zlib's zutil.h fdopen macro conflicts with macOS 26.x SDK _stdio.h
-    # Use the pre-built binary wheels instead.
+    #   2. Bundled zlib's fdopen macro conflicts with macOS 26.x _stdio.h
+    # Use the pre-built binary wheel instead.
     echo "[cppyy] macOS: installing pre-built binary wheels..."
     pip install "cppyy=={version}" \
         --no-cache-dir \
         --force-reinstall \
         --target {prefix}
 
-    # cling 16 (in the binary wheel) cannot parse new macOS SDK headers and so
-    # cannot build the PCH (allDict.cxx.pch) on first import.
-    # Copy a pre-built PCH from an existing working installation if available.
     PCH_DEST="{prefix}/cppyy_backend/etc"
+
+    # ------------------------------------------------------------------
+    # PCH generation: cling 16 cannot parse macOS 26.x SDK headers.
+    # Strategy: if an older macOS SDK (≤15.x) is available in the
+    # Command Line Tools, point cling at it for PCH generation only.
+    # The resulting PCH works for all subsequent cppyy usage.
+    # ------------------------------------------------------------------
     if ! ls "$PCH_DEST"/allDict.cxx.pch.* 2>/dev/null | grep -q .; then
-      PCH_SRC=$(find "$HOME" \
-          -path "*/cppyy_backend/etc/allDict.cxx.pch.*" \
-          -not -path "{prefix}/*" \
-          2>/dev/null | head -1)
-      if [ -n "$PCH_SRC" ]; then
-        cp "$PCH_SRC" "$PCH_DEST/"
-        echo "[cppyy] Copied pre-built PCH: $(basename $PCH_SRC)"
-        echo "[cppyy] Source: $PCH_SRC"
+      OLD_SDK=$(ls -d /Library/Developer/CommandLineTools/SDKs/MacOSX15*.sdk \
+                       /Library/Developer/CommandLineTools/SDKs/MacOSX14*.sdk \
+                       /Library/Developer/CommandLineTools/SDKs/MacOSX13*.sdk \
+                2>/dev/null | sort -V | tail -1)
+
+      if [ -n "$OLD_SDK" ]; then
+        SDK_VER=$(basename "$OLD_SDK" .sdk | sed 's/MacOSX//')
+        echo "[cppyy] Building PCH using older SDK: $OLD_SDK"
+        echo "[cppyy] (cling 16 is incompatible with macOS 26.x SDK headers)"
+        SDKROOT="$OLD_SDK" \
+        MACOSX_DEPLOYMENT_TARGET="$SDK_VER" \
+        CLING_REBUILD_PCH=1 \
+        PYTHONPATH={prefix} python3 -c "
+import cppyy
+print('[cppyy] PCH built successfully with SDK', '$SDK_VER')
+"
+        if ls "$PCH_DEST"/allDict.cxx.pch.* 2>/dev/null | grep -q .; then
+          echo "[cppyy] PCH generated: $(ls $PCH_DEST/allDict.cxx.pch.*)"
+        else
+          echo "[cppyy] WARNING: PCH generation did not produce a file."
+        fi
       else
-        echo "[cppyy] WARNING: No pre-built PCH found in \$HOME."
-        echo "[cppyy] 'import cppyy' will fail until you supply one:"
-        echo "[cppyy]   cp <working-env>/lib/python*/site-packages/cppyy_backend/etc/allDict.cxx.pch.* \\"
-        echo "[cppyy]      $PCH_DEST/"
+        # No old SDK found — try if the system SDK somehow works (unlikely
+        # with cling 16 + macOS 26.x but worth attempting).
+        echo "[cppyy] No macOS 13/14/15 SDK found in CommandLineTools."
+        echo "[cppyy] Attempting PCH generation with system SDK..."
+        CLING_REBUILD_PCH=1 PYTHONPATH={prefix} python3 -c "import cppyy" 2>&1 || true
+        if ! ls "$PCH_DEST"/allDict.cxx.pch.* 2>/dev/null | grep -q .; then
+          echo "[cppyy] -------------------------------------------------------"
+          echo "[cppyy] FATAL: Cannot generate PCH. cling 16 in cppyy 3.5.0"
+          echo "[cppyy] is incompatible with macOS 26.x SDK headers."
+          echo "[cppyy]"
+          echo "[cppyy] Fix options:"
+          echo "[cppyy]  1. Install Xcode Command Line Tools for macOS 15:"
+          echo "[cppyy]       sudo xcode-select -s /path/to/older/Xcode"
+          echo "[cppyy]     or ensure /Library/Developer/CommandLineTools/SDKs/"
+          echo "[cppyy]     contains a MacOSX13.x, MacOSX14.x, or MacOSX15.x SDK."
+          echo "[cppyy]  2. Copy a pre-built PCH from an existing working env:"
+          echo "[cppyy]       cp <working-env>/lib/python*/site-packages/cppyy_backend/etc/allDict.cxx.pch.* \\"
+          echo "[cppyy]          $PCH_DEST/"
+          echo "[cppyy]  3. Wait for cppyy 3.6+ with LLVM 17+ support."
+          echo "[cppyy] -------------------------------------------------------"
+          exit 1
+        fi
       fi
     else
-      echo "[cppyy] PCH already present."
+      echo "[cppyy] PCH already present, skipping generation."
     fi
 
   else
@@ -77,16 +113,16 @@ build_script: |
         --target {prefix}
   fi
 
-  # Verify — PYTHONPATH must include {prefix} since packages land there, not in site-packages.
-  # libCling is a .dylib on macOS and a .so on Linux.
+  # ------------------------------------------------------------------ verify
+  # PYTHONPATH must include {prefix} since packages land there, not site-packages.
   PYTHONPATH={prefix} python3 -c "
-  import cppyy, cppyy_backend, pathlib, sys
-  base = pathlib.Path(cppyy_backend.__file__).parent / 'lib'
-  lib = next((base / n for n in ('libCling.dylib', 'libCling.so') if (base / n).exists()), None)
-  print('[cppyy]', cppyy.__version__, '- libCling:', lib.name if lib else 'NOT FOUND')
-  if lib is None:
-      sys.exit(1)
-  "
+import cppyy, cppyy_backend, pathlib, sys
+base = pathlib.Path(cppyy_backend.__file__).parent / 'lib'
+lib = next((base / n for n in ('libCling.dylib', 'libCling.so') if (base / n).exists()), None)
+print('[cppyy]', cppyy.__version__, '- libCling:', lib.name if lib else 'NOT FOUND')
+if lib is None:
+    sys.exit(1)
+"
 
   echo "{version}" > {prefix}/.cppyy_install
-  echo "[cppyy] Done. Test with: PYTHONPATH={prefix} python3 -c 'import cppyy; print(cppyy.__version__)'"
+  echo "[cppyy] Done."
