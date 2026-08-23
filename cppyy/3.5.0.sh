@@ -96,7 +96,7 @@ else
   if command -v g++ &>/dev/null; then
     export CXX=g++ CC=gcc
   fi
-  echo "[cppyy] Compiler: $(${{CXX:-c++}} --version | head -1)"
+  echo "[cppyy] Compiler: $(${CXX:-c++} --version | head -1)"
   echo "[cppyy] cmake:    $(cmake --version | head -1)"
 
   echo "[cppyy] Building cppyy-cling wheel from source (~30-90 min)..."

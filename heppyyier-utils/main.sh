@@ -12,25 +12,25 @@ mkdir -p {{ prefix }}/bin
 # Install explicit wrappers so heppyyier modulefiles reliably expose them.
 cat > {{ prefix }}/bin/jewel_prepare <<'EOF'
 #!/usr/bin/env bash
-export PYTHONPATH="{{ prefix }}:${{PYTHONPATH:-}}"
+export PYTHONPATH="{{ prefix }}:${PYTHONPATH:-}"
 exec python3 -m heppyyier_utils.jewel.cli prepare "$@"
 EOF
 
 cat > {{ prefix }}/bin/jewel_run <<'EOF'
 #!/usr/bin/env bash
-export PYTHONPATH="{{ prefix }}:${{PYTHONPATH:-}}"
+export PYTHONPATH="{{ prefix }}:${PYTHONPATH:-}"
 exec python3 -m heppyyier_utils.jewel.cli run "$@"
 EOF
 
 cat > {{ prefix }}/bin/jewel_convert <<'EOF'
 #!/usr/bin/env bash
-export PYTHONPATH="{{ prefix }}:${{PYTHONPATH:-}}"
+export PYTHONPATH="{{ prefix }}:${PYTHONPATH:-}"
 exec python3 -m heppyyier_utils.jewel.cli convert "$@"
 EOF
 
 cat > {{ prefix }}/bin/jewel_pipeline <<'EOF'
 #!/usr/bin/env bash
-export PYTHONPATH="{{ prefix }}:${{PYTHONPATH:-}}"
+export PYTHONPATH="{{ prefix }}:${PYTHONPATH:-}"
 exec python3 -m heppyyier_utils.jewel.cli pipeline "$@"
 EOF
 
