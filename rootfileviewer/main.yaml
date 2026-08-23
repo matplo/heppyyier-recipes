@@ -1,0 +1,10 @@
+name: rootfileviewer
+version: "main"
+url: ""
+build_system: script
+generate_modulefile: false
+
+# Pure-Python pip install from GitHub via SSH.
+# Installs directly into the active Python environment (no --target prefix).
+# No TCL modulefile needed — package is available via normal 'import' after install.
+build_script: "main.sh"
