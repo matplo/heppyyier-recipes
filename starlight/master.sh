@@ -1,0 +1,11 @@
+set -e
+mkdir -p build && cd build
+cmake_opts="-DCMAKE_INSTALL_PREFIX={{ prefix }} -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
+
+# Optional integrations
+[ -n "{{ hepmc3_prefix }}"  ] && cmake_opts="$cmake_opts -DENABLE_HEPMC3=ON -DHepMC3_DIR={{ hepmc3_prefix }}" && echo "[starlight] HepMC3  : {{ hepmc3_prefix }}"
+[ -n "{{ dpmjet_prefix }}"  ] && cmake_opts="$cmake_opts -DENABLE_DPMJET=ON -DDPMJET_DIR={{ dpmjet_prefix }}" && echo "[starlight] DPMJET  : {{ dpmjet_prefix }}"
+
+cmake .. $cmake_opts
+make -j{{ n_cores }}
+make install

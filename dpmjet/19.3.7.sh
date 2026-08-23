@@ -1,0 +1,15 @@
+set -e
+# Require a Fortran compiler
+if [ -z "$FC" ]; then
+  FC=$(command -v gfortran 2>/dev/null || command -v f77 2>/dev/null || echo "")
+fi
+if [ -z "$FC" ]; then
+  echo "[dpmjet] ERROR: no Fortran compiler found — install gfortran (brew install gcc)"
+  exit 1
+fi
+export FC
+make -j{{ n_cores }} exe
+mkdir -p {{ prefix }}/bin {{ prefix }}/lib
+# Makefile places binaries in ./bin/ and library in ./lib/
+cp bin/DPMJET bin/DPMJET_direct bin/pho_aux bin/PHOJET bin/photo_hadronic {{ prefix }}/bin/
+cp lib/libDPMJET.a {{ prefix }}/lib/

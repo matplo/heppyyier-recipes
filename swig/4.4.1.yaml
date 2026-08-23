@@ -5,8 +5,4 @@ build_system: script
 make_jobs: 4
 verify_binary: swig
 
-build_script: |
-  set -e
-  ./configure --prefix={prefix} --without-alllang --with-python
-  make -j{n_cores}
-  make install
+build_script: "4.4.1.sh"

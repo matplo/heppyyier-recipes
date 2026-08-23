@@ -1,0 +1,32 @@
+set -e
+
+# Ensure setuptools is available for the pip source build backend
+pip install setuptools wheel --quiet
+
+# Use g++ explicitly — on SUSE/RHEL the default 'c++' may point to
+# an old system GCC (e.g. 7.5.0) while 'g++' is a newer GCC 13+.
+export CXX=g++ CC=gcc
+echo "[cppyy-cling] Building LLVM + cling from source with $(g++ --version | head -1)"
+echo "[cppyy-cling] The sdist bundles the full LLVM + cling source tree (~13k files)."
+echo "[cppyy-cling] Expect 30-90 min and up to 10 GB temporary disk space."
+
+# Uninstall the pre-built binary wheel
+pip uninstall -y cppyy cppyy-backend cppyy-cling 2>/dev/null || true
+
+# Build cppyy-cling from source, installing to heppyyier-managed prefix.
+# STDCXX=17: use C++17 (required; 20 is the default on non-manylinux)
+# MAKE_NPROCS: parallelism for the cmake build
+STDCXX=17 MAKE_NPROCS={{ n_cores }} CXX=g++ CC=gcc \
+pip install cppyy-cling=={{ version }} \
+    --no-binary cppyy-cling \
+    --no-cache-dir \
+    --force-reinstall \
+    --target {{ prefix }} \
+    --verbose
+
+# Verify — packages are in {{ prefix }}, not site-packages
+PYTHONPATH={{ prefix }} python3 -c "import cppyy_backend, pathlib; lib=pathlib.Path(cppyy_backend.__file__).parent/'lib'; cling=lib/'libCling.so'; print('[cppyy-cling] backend:', cppyy_backend.__file__); print('[cppyy-cling] libCling.so exists:', cling.exists()); assert cling.exists(), 'libCling.so not found'"
+
+# Write installation info to the heppyyier prefix for registry tracking
+PYTHONPATH={{ prefix }} python3 -c "import cppyy_backend, pathlib; pathlib.Path('{{ prefix }}/.cling_install').write_text(str(pathlib.Path(cppyy_backend.__file__).parent))"
+echo "[cppyy-cling] Build complete."
