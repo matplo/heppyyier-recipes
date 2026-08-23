@@ -4,6 +4,15 @@ url: ""
 build_system: script
 
 # Meta-recipe: installs the standard HEP software bundle.
-# Individual packages are built by their own recipes.
-# Re-run with --force to update/rebuild the whole stack.
+# Dependencies are resolved natively by the heppyyier builder — each package
+# is built and registered individually before hepbundle itself is registered.
+# This is preferable to calling 'heyy install' from a shell script, which
+# would bypass the in-process registry and lose entries on write-back.
+depends_on:
+  - fastjet
+  - fjcontrib
+  - hepmc3
+  - lhapdf
+  - pythia8
+
 build_script: "main.sh"

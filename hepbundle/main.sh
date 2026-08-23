@@ -1,14 +1,3 @@
 set -e
-
-echo "[hepbundle] Installing HEP software bundle..."
-echo "[hepbundle] packages: fastjet fjcontrib hepmc3 lhapdf pythia8"
-echo ""
-
-heyy install fastjet
-heyy install fjcontrib
-heyy install hepmc3
-heyy install lhapdf
-heyy install pythia8
-
-echo ""
-echo "[hepbundle] Done."
+# All packages in depends_on are already installed by the time this script runs.
+echo "[hepbundle] Bundle ready: fastjet fjcontrib hepmc3 lhapdf pythia8"
