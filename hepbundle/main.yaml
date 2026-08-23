@@ -1,0 +1,9 @@
+name: hepbundle
+version: "main"
+url: ""
+build_system: script
+
+# Meta-recipe: installs the standard HEP software bundle.
+# Individual packages are built by their own recipes.
+# Re-run with --force to update/rebuild the whole stack.
+build_script: "main.sh"
